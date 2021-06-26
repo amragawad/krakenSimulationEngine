@@ -8,7 +8,7 @@ const port = 3000;
 const engineLink = "http://localhost:3003"
 
 // for simiplicty we use int index
-var index=0;
+var index = 0;
 
 const _PAIR = "ETHEUR";
 const _LIMIT = "limit";
@@ -17,12 +17,12 @@ const _TYPE_BUY = "buy";
 const _TYPE_SELL = "sell";
 
 // 
-var openOrders = []
+var openOrders = {open:{}}
 var Balance = 600;
 const error = [];
 
 async function getPrice() {
-    const resp = await axios.get(engineLink+"/Price");
+    const resp = await axios.get(engineLink + "/Price");
     const price = (resp.data.result['price']);
     //console.log(price);
     return price;
@@ -31,88 +31,145 @@ async function getPrice() {
 async function constructTicker() {
     // get current price from engine
     const price = await getPrice();
-    
+
     return {
         [_PAIR]: {
-            a : [
+            a: [
                 price
             ]
         }
     };
 }
 
-async function createBuyOrder(order) {
-/*
-example order req
-{
-		"ordertype": "market",
-		"type": "buy",
-		"volume": "volume",
-		"pair": "ETHEUR",
-		"close[ordertype]" : "take-profit",
-		"close[price]": "+1%" ,
-		"validate": "validateOrder"
-}
-*/
-    if(order.ordertype == _MARKET)
+function createOpenOrder(type, orderType, volume, pair, price, closePricePerc) {
+
+    const sellPrice = price + (price * (closePricePerc[1] / 100));
+    var descr = {
+        "ordertype": orderType,
+        "type": type,
+        "volume": volume,
+        "pair": pair,
+    }
+    if (type == _TYPE_BUY) {
+        descr.price = price;
+        descr['close[ordertype]'] = "take-profit";
+        descr['close[price]'] = closePricePerc;
+    }
+    else
     {
-        // get current ETH price
-        const price = await getPrice();
+        descr.price = sellPrice;
+    }
+    return {
+               'descr' : descr
+    };   
+}
+
+function executeSellOrder(order, cost) {
+    // decrease Balance
+    const fee = cost * 0.03;
+    Balance += (cost - fee);
+}
+
+function createBuyOrder(order, price) {
+    /*
+    example order req
+    {
+            "ordertype": "market",
+            "type": "buy",
+            "volume": "volume",
+            "pair": "ETHEUR",
+            "close[ordertype]" : "take-profit",
+            "close[price]": "+1%" ,
+            "validate": "validateOrder"
+    }
+    */
+    var newOpenOrder=[];
+    if (order.ordertype == _MARKET) {               
         console.log(order.ordertype + " buy order is being executed @price: " + price);
+        //console.log(order);
         var cost = (order.volume * price);
         const fee = cost * 0.03;
         cost = cost + fee;
         // check if balance is enough
-        if(Balance < cost)
-        {
+        if (Balance < cost) {
             console.log(" low fund: Balance: " + Balance + "cost: " + cost);
             return;
         }
         // update balance
-        Balance = Balance - cost;
-
+        Balance = Balance - cost;        
         // add to Open orders
-        addToOpenOrders(order);
-        // incrrease index 
-        index++;        
+        newOpenOrder = createOpenOrder(_TYPE_SELL, _LIMIT,
+            order.volume, order.pair, price, order['close[price]']);
     }
-    const buyOrderReturn = {
+    else if(order.ordertype == _LIMIT)
+    {
+        console.log(order.ordertype + " buy order is  recieved");
+        //console.log(order);
+        newOpenOrder = createOpenOrder(_TYPE_BUY, _LIMIT,
+            order.volume, order.pair, price, order['close[price]']);   
+    }
+    //console.log(newOpenOrder);
+    addToOpenOrders(newOpenOrder);   
+    // incrrease index 
+    index++;          
+
+    return { // just fake resp to make sure result is not empty
         "descr": {
             "order": "buy 2.12340000 XBTUSD @ limit 45000.1 with 2:1 leverage",
             "close": "close position @ stop loss 38000.0 -> limit 36000.0"
-            },
+        },
         "txid": [
             "OUF4EM-FRGI2-MQMWZD"
-            ]
+        ]
     }
 }
 
-function addToOpenOrders(order) {
-    /* example
-"open": {
-"OQCLML-BW3P3-BUCMWZ": {
-"descr": {
-    "pair": "XBTUSD", // _PAIR
-    "type": "buy",
-    },
+function isEmpty(object) {  
+	return Object.keys(object).length === 0
 }
-    */
-   const openOrderJson = {
-       'open': {
-            [index] : {
-                'descr': {
-                    'pair': order.pair,
-                    'type': order.type
-                }
-            }
-       }
+
+function addToOpenOrders(order) {
+   if(isEmpty(order))
+   {
+    return;
    }
-   //index+=1;
-   openOrders.push(openOrderJson);
+    openOrders.open[index]= order;
 }
 
 function constructResp(result) {
     return "{'error': " + JSON.stringify(error) + ", 'result': " + JSON.stringify(result) + "}";
+}
+
+function tick(priceTick) {
+    //console.log(price);
+    var deleteIndex=[];
+    // loop thru open orders to check if the recieved price
+    // triggers sell/buy order
+    Object.entries(openOrders.open).forEach(
+        ([indx, openOrderDescr]) => 
+        {
+            //console.log(indx, openOrderDescr);
+            if( openOrderDescr.descr.type == _TYPE_SELL  && priceTick >= openOrderDescr.descr.price)
+            {
+                console.log("Price match, executing  "+ openOrderDescr.descr.type + " @price:" + priceTick);
+                executeSellOrder(openOrderDescr.descr, priceTick * openOrderDescr.descr.volume);
+                deleteIndex.push(indx);
+            }
+            else if(openOrderDescr.descr.type == _TYPE_BUY  && priceTick >= openOrderDescr.descr.price)
+            {
+                console.log("Price match, executing  "+ openOrderDescr.descr.type + " @price:" + priceTick);
+                openOrderDescr.descr.ordertype = _MARKET;
+                createBuyOrder(openOrderDescr.descr, priceTick);
+                deleteIndex.push(indx);
+            }
+            // now delete the executed orders from the open orders
+            deleteIndex.forEach(element => {
+                //console.log(openOrders.open[element]);
+                delete openOrders.open[element];
+            });
+        }
+    );
+   
 }
 
 // Open orders
@@ -124,11 +181,13 @@ app.get('/OpenOrders', (req, res) => {
 // add sell or buy order
 app.post('/AddOrder', async (req, res) => {
     console.log("-----/AddOrder called-----");
+    // get current ETH price
+    const price = await getPrice();
     // assume always buy or buy limit order with sell-take-profit fields
     // execute the buy order
-    await createBuyOrder(req.body);
+    const result = createBuyOrder(req.body, price);
 
-    res.send(constructResp(openOrders));
+    res.send(constructResp(result));
 });
 
 // retrun the current balance
@@ -139,11 +198,18 @@ app.get('/Balance', (req, res) => {
 });
 
 app.get('/Ticker', async (req, res) => {
-    console.log("-----/Ticker called-----");    
+    console.log("-----/Ticker called-----");
     const result = await constructTicker();
     res.send(constructResp(result));
 });
 
+app.get('/pulse', async (req, res) => {
+    console.log("-----/pulse called-----");
+    // here we recieve ticks from engine everytime the price changes
+    // req.param should have the price
+    tick(parseFloat(req.query.price));
+    res.send("ok");
+});
 
 app.listen(port, () => {
     console.log(`Example app listening at http://localhost:${port}`)
