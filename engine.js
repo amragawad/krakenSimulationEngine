@@ -24,7 +24,7 @@ function constructResponse(result) {
 
 // Open orders
 app.get('/Price', (req, res) => {
-    console.log("-----/Price called-----");   
+    //console.log("-----/Price called-----");   
     const result = {
         price : tick
     } ;
@@ -33,16 +33,16 @@ app.get('/Price', (req, res) => {
 
 
 app.get('/tick', async (req, res) => {
-    console.log("-----/tick called-----");
+    //console.log("-----/tick called-----");
     // here we recieve ticks from engine everytime the price changes
     // req.param should have the price
     tick = parseFloat(req.query.price);
     const time = req.query.time;
-    console.log("Price: " + tick);
+    //console.log("Price: " + tick);
     await axios.get(ordersLink, { params: { price: tick , time: time} });
     res.send("ok");
 });
 
 app.listen(port, () => {
-    console.log(`Example app listening at http://localhost:${port}`)
+    //console.log(`Example app listening at http://localhost:${port}`)
 })

@@ -33,7 +33,7 @@ function recordBalance() {
 async function getPrice() {
     const resp = await axios.get(engineLink + "/Price");
     const price = (resp.data.result['price']);
-    console.log(price);
+    //console.log(price);
     return price;
 }
 
@@ -80,11 +80,11 @@ function executeSellOrder(order, cost) {
     // decrease Balance
     // console.log(order);
     // console.log("Cost: " + cost);
+    recordBalance();
     const fee = cost * _FEE;
      console.log("Fee: " + fee);
      console.log((cost - fee));
-    Balance += (cost - fee);
-    recordBalance();
+    Balance += (cost - fee);    
 }
 
 function createBuyOrder(order, price) {
@@ -114,8 +114,8 @@ function createBuyOrder(order, price) {
             return;
         }
         // update balance
-        Balance = Balance - cost;
         recordBalance();
+        Balance = Balance - cost;       
         // add to Open orders
         newOpenOrder = createOpenOrder(_TYPE_SELL, _LIMIT,
             order.volume, order.pair, price, order['close[price]']);
@@ -192,14 +192,14 @@ function tick(priceTick) {
 
 // Open orders
 app.post('/OpenOrders', (req, res) => {
-    console.log("-----/OpenOrders called-----");
+    //console.log("-----/OpenOrders called-----");
     res.send(constructResp(openOrders));
 });
 
 // add sell or buy order
 app.post('/AddOrder', async (req, res) => {
-    console.log("-----/AddOrder called-----");
-    console.log(req.body);
+    //console.log("-----/AddOrder called-----");
+    //console.log(req.body);
     // get current ETH price
     const price = await getPrice();
     // assume always buy or buy limit order with sell-take-profit fields
@@ -211,32 +211,32 @@ app.post('/AddOrder', async (req, res) => {
 
 // retrun the current balance
 app.post('/Balance', (req, res) => {
-    console.log("-----/Balance called-----");
+    //console.log("-----/Balance called-----");
     const jsonBalance = { ZEUR: Balance };
     res.send(constructResp(jsonBalance));
 });
 
 app.post('/Ticker', async (req, res) => {
-    console.log("-----/Ticker called-----");
+    //console.log("-----/Ticker called-----");
     const result = await constructTicker();
     res.send(constructResp(result));
 });
 
 app.post('/CancelAll', (req, res) => {
-    console.log("-----/CancelAll called-----");
+    //console.log("-----/CancelAll called-----");
     openOrders = { open: {} };
     res.send("ok");
 });
 
 // cancel order
 app.post('/CancelOrder', (req, res) => {
-    console.log("-----/CancelOrder called-----");
+    //console.log("-----/CancelOrder called-----");
     cancelOrder(req.body.txid);
     res.send("ok");
 });
 // Internal api
 app.get('/pulse', (req, res) => {
-    console.log("-----/pulse called-----");
+    //console.log("-----/pulse called-----");
     // here we recieve ticks from engine everytime the price changes
     // req.param should have the price
     time = req.query.time;

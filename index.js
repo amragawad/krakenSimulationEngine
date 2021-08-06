@@ -16,10 +16,10 @@ start();
 
 async function start() {
     var msgArray = [];                 
-    var varLast = 1546300800000000000;// from 1 Jan 2019 //1622764800000000000; // from June 4 2021
-    const startTime = 1596412800000000000; // till 1st Aug 2020//(new Date()).getTime() * 1000;
+    var varLast =     1546300800000000000 ;// from 1st Jan 2019 //1577836800000000000;// from 1 Jan 2020 //1622764800000000000; // from June 4 2021
+    const startTime = 1609372800000000000;//(new Date()).getTime() * 1000;// 1596412800000000000; // till 1st Aug 2020
     console.log("Last: "+ startTime);
-    while ( startTime > (varLast) ) {
+    while ( startTime > (varLast/1000) ) {
             //console.log(link+varLast);
         const resp = await axios.get(link+varLast); 
 		// await new Promise(resolve => 
@@ -34,13 +34,13 @@ async function start() {
             varLast = resp.data.result.last;
             console.log(varLast);
 			for (let element of resp.data.result['XETHZEUR']) {
-                msgArray.push({body: element});
+                //msgArray.push({body: element});
 				await axios.get(engineLink, { params: { price: parseFloat(element[0]) , time: new Date( (element[2] * 1000) ) } });
-				await new Promise(resolve => 
-					{
-						setTimeout(resolve, 1);
-					}
-					); 
+				// await new Promise(resolve => 
+				// 	{
+				// 		setTimeout(resolve, 1);
+				// 	}
+				// 	); 
             }
 			// send tick 
             // send msg to service bus
